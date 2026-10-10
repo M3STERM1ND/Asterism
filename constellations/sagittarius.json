@@ -1,0 +1,48 @@
+{
+  "name": "Sagittarius",
+  "order": "sequential",
+  "stars": [
+    [
+      1.0,
+      0.539
+    ],
+    [
+      0.7,
+      0.835
+    ],
+    [
+      0.071,
+      0.499
+    ],
+    [
+      0.0,
+      0.333
+    ],
+    [
+      0.191,
+      0.231
+    ],
+    [
+      0.349,
+      0.283
+    ],
+    [
+      0.638,
+      0.165
+    ],
+    [
+      0.751,
+      0.495
+    ]
+  ],
+  "star_names": [
+    "Alnasl",
+    "Kaus Australis",
+    "Ascella",
+    "Tau Sagittarii",
+    "Nunki",
+    "Phi Sagittarii",
+    "Kaus Borealis",
+    "Kaus Media"
+  ]
+}

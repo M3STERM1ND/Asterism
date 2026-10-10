@@ -1,0 +1,28 @@
+{
+  "name": "Cancer",
+  "order": "sequential",
+  "stars": [
+    [
+      0.318,
+      0.0
+    ],
+    [
+      0.359,
+      0.373
+    ],
+    [
+      0.342,
+      0.542
+    ],
+    [
+      0.682,
+      1.0
+    ]
+  ],
+  "star_names": [
+    "Iota Cancri",
+    "Asellus Borealis",
+    "Asellus Australis",
+    "Altarf"
+  ]
+}

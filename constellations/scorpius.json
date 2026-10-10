@@ -1,0 +1,58 @@
+{
+  "name": "Scorpius",
+  "order": "sequential",
+  "stars": [
+    [
+      0.91,
+      0.0
+    ],
+    [
+      0.956,
+      0.12
+    ],
+    [
+      0.696,
+      0.283
+    ],
+    [
+      0.639,
+      0.359
+    ],
+    [
+      0.511,
+      0.618
+    ],
+    [
+      0.496,
+      0.778
+    ],
+    [
+      0.315,
+      1.0
+    ],
+    [
+      0.09,
+      0.99
+    ],
+    [
+      0.044,
+      0.82
+    ],
+    [
+      0.123,
+      0.738
+    ]
+  ],
+  "star_names": [
+    "Acrab",
+    "Dschubba",
+    "Antares",
+    "Paikauhale",
+    "Larawag",
+    "Xamidimura",
+    "Eta Scorpii",
+    "Sargas",
+    "Girtab",
+    "Shaula"
+  ]
+}

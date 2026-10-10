@@ -1,0 +1,38 @@
+{
+  "name": "Aquarius",
+  "order": "sequential",
+  "stars": [
+    [
+      1.0,
+      0.545
+    ],
+    [
+      0.654,
+      0.421
+    ],
+    [
+      0.385,
+      0.254
+    ],
+    [
+      0.298,
+      0.491
+    ],
+    [
+      0.016,
+      0.484
+    ],
+    [
+      0.0,
+      0.746
+    ]
+  ],
+  "star_names": [
+    "Albali",
+    "Sadalsuud",
+    "Sadalmelik",
+    "Ancha",
+    "Lambda Aquarii",
+    "Skat"
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "name": "Capricornus",
+  "order": "sequential",
+  "stars": [
+    [
+      1.0,
+      0.16
+    ],
+    [
+      0.967,
+      0.266
+    ],
+    [
+      0.62,
+      0.84
+    ],
+    [
+      0.229,
+      0.627
+    ],
+    [
+      0.0,
+      0.33
+    ],
+    [
+      0.462,
+      0.382
+    ]
+  ],
+  "star_names": [
+    "Algedi",
+    "Dabih",
+    "Omega Capricorni",
+    "Zeta Capricorni",
+    "Deneb Algedi",
+    "Theta Capricorni"
+  ]
+}
