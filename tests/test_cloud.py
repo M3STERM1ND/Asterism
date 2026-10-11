@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 import unittest
+import unittest.mock
 
 import cloud
 from accounts import Store
@@ -124,3 +125,24 @@ class PushTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AutoSyncTest(unittest.TestCase):
+    def test_an_unconnected_account_does_nothing_and_never_raises(self):
+        folder = tempfile.mkdtemp()
+        Store(folder).register("sam", "hunter22", "patient")
+        self.assertIsNone(cloud.sync(folder, "sam"))
+        self.assertEqual(cloud.coach_feedback(folder, "sam"), [])
+
+    def test_a_broken_connection_is_reported_not_raised(self):
+        folder = tempfile.mkdtemp()
+        store = Store(folder)
+        store.register("sam", "hunter22", "patient")
+        cloud.save_links(store, {"sam": {"email": "x@example.com", "refresh_token": "expired"}})
+
+        def offline():
+            raise ConnectionError("no internet")
+        with unittest.mock.patch.object(cloud, "connect", offline):
+            self.assertIsNone(cloud.sync(folder, "sam"))
+            self.assertEqual(cloud.coach_feedback(folder, "sam"), [])
+        self.assertEqual(oct(os.stat(os.path.join(folder, cloud.LINKS_FILE)).st_mode)[-3:], "600")

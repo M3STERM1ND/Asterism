@@ -28,6 +28,7 @@ from lean import LeanGuard
 from lean_test import LeanTest
 from lobby import Lobby
 from recording import Recorder, video_name
+import cloud
 import progress
 import therapy_report
 from session_log import LOG_PATH, SessionRecord, append_row, arm_used, fill_row
@@ -68,6 +69,7 @@ class Play:
         self.videos_dir = None   # where this run's videos go (None: no recording)
         self.recorder = Recorder()
         self.feedback = []       # the coach's latest notes for this patient, shown on the start screen
+        self.cloud_feedback = []  # notes from Supabase (connected accounts), fetched when a run is chosen
         self.view = view
         self.guard = LeanGuard()
         self.level = 0
@@ -87,7 +89,22 @@ class Play:
         self.settings = load_settings(self.settings_path)
         self.sky, self.level = [], 0
         self.store.touch_run(run)
+        self.fetch_cloud_feedback()
         self.go_to_start()
+
+    def fetch_cloud_feedback(self):
+        """Get the coach's notes from Supabase in the background; they show on the start screen when they arrive."""
+        if self.lobby is None or self.lobby.user is None:
+            return
+        import threading
+
+        def fetch(data_dir=self.store.data_dir, username=self.lobby.user.username):
+            notes = cloud.coach_feedback(data_dir, username)
+            if notes:
+                self.cloud_feedback = notes
+                if self.mode == "start":
+                    self.feedback = (notes + self.feedback)[:FEEDBACK_SHOWN]
+        threading.Thread(target=fetch, daemon=True).start()
 
     def go_to_lobby(self):
         """Back to the run list (W on the start screen), to switch runs or log out."""
@@ -113,8 +130,9 @@ class Play:
         self.recorder.cancel()  # a session left halfway has no report row, so its video goes too
         self.mode = "start"
         if self.run is not None:  # the coach may have written since: the portal shares the same database
-            self.feedback = self.store.feedback_for(self.run.patient_id)[:FEEDBACK_SHOWN]
+            local = self.store.feedback_for(self.run.patient_id)[:FEEDBACK_SHOWN]
             self.store.mark_read(self.run.patient_id)
+            self.feedback = (self.cloud_feedback + local)[:FEEDBACK_SHOWN]
         self.view.frozen = False
         self.calibrator = None
         self.calibration = None
@@ -196,12 +214,15 @@ class Play:
             for grip in self.battle.grips:
                 self.record.absorb_grip(grip)
         earlier = progress.load_sessions(self.log_path)  # read before this row is added: the report compares with these
+        checkin_follows = self.battle is not None
         row = self.record.row(now, self.guard.warnings, result, damage)
         row["video"] = self.recorder.stop() or ""
         self.record.date = row["date"]
         append_row(row, self.log_path)
         if self.battle is not None:
             self.battle.history, self.battle.session = earlier, progress.parse_row(row)
+        if not checkin_follows:   # practice: no check-in, so upload now (battles upload after the check-in)
+            self.sync_cloud()
 
     def save_checkin(self):
         """The patient answered how they feel: put it on this battle's row in sessions.csv, once."""
@@ -214,6 +235,13 @@ class Play:
         fill_row(self.record.date, {k: str(v) for k, v in battle.checkin.items()}, self.log_path)
         for key, value in battle.checkin.items():
             setattr(battle.session, key, float(value))
+        self.sync_cloud()
+
+    def sync_cloud(self):
+        """Send this run's new sessions and videos to Supabase in the background (only for a connected
+        account, see python -m cloud connect). The game never waits for it and keeps working offline."""
+        if self.run is not None and self.lobby is not None and self.lobby.user is not None:
+            cloud.sync_in_background(self.store.data_dir, self.lobby.user.username)
 
     def calibrated(self):
         """Report the calibration in the log, then start the chosen mode."""

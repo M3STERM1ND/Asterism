@@ -9,6 +9,8 @@ Supabase's row-level security as the signed-in user: the anon key alone can read
   .venv/bin/python -m cloud push        sign in as a patient and send a local account's runs up (safe to repeat)
   .venv/bin/python -m cloud coach       sign in as a coach and list your patients' sessions and feedback
   .venv/bin/python -m cloud link        sign in as a patient and link to an open coach
+  .venv/bin/python -m cloud connect     once per patient: after that the game uploads every battle by itself
+                                        and shows the coach's feedback from Supabase
 
 Settings come from .env (git-ignored): SUPABASE_URL and SUPABASE_ANON_KEY.
 """
@@ -23,6 +25,7 @@ from accounts import Store
 
 ENV_FILE = ".env"
 MAP_FILE = "cloud_map.json"     # in data/: which local run is which cloud run, so nothing is sent twice
+LINKS_FILE = "cloud_accounts.json"  # in data/: local username -> Supabase sign-in token (never the password)
 BUCKET = "session-videos"
 SERVICE_KEY_HINTS = ("service_role", "sb_secret_")
 
@@ -208,6 +211,96 @@ def coach_overview(client, profile):
     return lines
 
 
+# ------------------------------------------------------------------ the game's automatic sync
+def load_links(store):
+    try:
+        with open(os.path.join(store.data_dir, LINKS_FILE), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def save_links(store, links):
+    path = os.path.join(store.data_dir, LINKS_FILE)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(links, f, indent=2)
+    os.chmod(path, 0o600)  # only this computer's user can read the sign-in tokens
+
+
+def connect_local(store, username, client, email, password):
+    """Remember a Supabase sign-in for a local game account, so the game can sync it from now on."""
+    profile = sign_in(client, email, password)
+    if profile["role"] != "patient":
+        raise CloudError("Connect a patient account: the game uploads a patient's sessions")
+    links = load_links(store)
+    links[username] = {"email": email, "refresh_token": client.auth.get_session().refresh_token}
+    save_links(store, links)
+    return profile
+
+
+def client_for(store, username, connect_fn=None):
+    """A signed-in client and profile for a connected local account, or None if it isn't connected.
+    Supabase replaces the token on every refresh, so the new one is saved straight away."""
+    link = load_links(store).get(username)
+    if not link:
+        return None
+    client = (connect_fn or connect)()
+    answer = client.auth.refresh_session(link["refresh_token"])
+    links = load_links(store)
+    links[username]["refresh_token"] = answer.session.refresh_token
+    save_links(store, links)
+    profile = client.table("profiles").select("*").eq("id", answer.user.id).single().execute().data
+    return client, profile
+
+
+def sync(data_dir, username):
+    """Upload a connected local account's new sessions and videos. Quiet; never raises (the game keeps going)."""
+    try:
+        store = Store(data_dir)
+        signed_in = client_for(store, username)
+        if signed_in is None:
+            return None
+        client, profile = signed_in
+        local = store.db.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+        sent = push_runs(client, store, profile, store.user(local["id"]), report=lambda line: None)
+        print(f"Cloud: sent {sent['sessions']} sessions and {sent['videos']} videos for {username}")
+        store.close()
+        return sent
+    except Exception as error:  # offline, signed out, Supabase down: it all goes up next time
+        print(f"Cloud: not synced this time ({str(error)[:120]})")
+        return None
+
+
+def sync_in_background(data_dir, username):
+    """Start a sync without making the game wait."""
+    import threading
+    threading.Thread(target=sync, args=(data_dir, username), daemon=True).start()
+
+
+def coach_feedback(data_dir, username):
+    """The coach's notes from Supabase for a connected local account, newest first, as objects the
+    start screen can draw (coach_name, created_at, text). Empty if not connected or offline."""
+    from types import SimpleNamespace
+    try:
+        store = Store(data_dir)
+        signed_in = client_for(store, username)
+        store.close()
+        if signed_in is None:
+            return []
+        client, profile = signed_in
+        notes = (client.table("feedback").select("text,created_at,coach_id").eq("patient_id", profile["id"])
+                 .order("created_at", desc=True).limit(5).execute().data)
+        names = {}
+        for n in notes:
+            if n["coach_id"] not in names:
+                names[n["coach_id"]] = client.table("profiles").select("display_name").eq("id", n["coach_id"]).single().execute().data["display_name"]
+        return [SimpleNamespace(coach_name=names[n["coach_id"]], created_at=n["created_at"][:16].replace("T", " "), text=n["text"])
+                for n in notes]
+    except Exception as error:
+        print(f"Cloud: feedback not fetched ({str(error)[:120]})")
+        return []
+
+
 # ------------------------------------------------------------------ command line
 def ask(prompt, secret=False):
     return (getpass.getpass if secret else input)(prompt).strip()
@@ -241,6 +334,17 @@ def main(args):
         elif command == "coach":
             profile = sign_in(client, ask("Coach email: "), ask("Password: ", secret=True))
             print("\n".join(coach_overview(client, profile)))
+        elif command == "connect":
+            store = Store()
+            username = ask("Local game username: ").lower()
+            if store.db.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone() is None:
+                raise CloudError("No local account with that username (see: python -m accounts list)")
+            profile = connect_local(store, username, client, ask("Supabase email: "), ask("Supabase password: ", secret=True))
+            print(f"Connected {username} to {profile['display_name']} on Supabase. Sending what's already here...")
+            sent = sync(store.data_dir, username)
+            if sent:
+                print(f"Sent {sent['runs']} runs, {sent['sessions']} sessions, {sent['videos']} videos. "
+                      "From now on the game uploads each battle by itself.")
         elif command == "link":
             profile = sign_in(client, ask("Patient email: "), ask("Password: ", secret=True))
             coaches = client.table("profiles").select("*").eq("role", "coach").order("display_name").execute().data
