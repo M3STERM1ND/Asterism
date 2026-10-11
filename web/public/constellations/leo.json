@@ -1,0 +1,48 @@
+{
+  "name": "Leo",
+  "order": "sequential",
+  "stars": [
+    [
+      1.0,
+      0.335
+    ],
+    [
+      0.944,
+      0.258
+    ],
+    [
+      0.75,
+      0.347
+    ],
+    [
+      0.723,
+      0.471
+    ],
+    [
+      0.283,
+      0.447
+    ],
+    [
+      0.0,
+      0.652
+    ],
+    [
+      0.282,
+      0.623
+    ],
+    [
+      0.817,
+      0.742
+    ]
+  ],
+  "star_names": [
+    "Ras Elased Australis",
+    "Rasalas",
+    "Adhafera",
+    "Algieba",
+    "Zosma",
+    "Denebola",
+    "Chertan",
+    "Regulus"
+  ]
+}

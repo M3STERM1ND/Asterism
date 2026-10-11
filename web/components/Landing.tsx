@@ -28,7 +28,7 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 
 /* ------------------------------------------------------------------ navbar */
 function Navbar() {
-  const links = [["How it works", "#features"], ["Results", "#proof"], ["Pricing", "#pricing"], ["FAQ", "#faq"], ["Log in", "/portal"]];
+  const links = [["How it works", "#features"], ["Results", "#proof"], ["Pricing", "#pricing"], ["FAQ", "#faq"], ["Play", "/play"], ["Log in", "/portal"]];
   return (
     <header className="sticky top-0 z-50 border-b border-line/60 bg-night/80 backdrop-blur-md">
       <nav className="mx-auto flex h-[72px] max-w-[1200px] items-center justify-between px-6 md:px-10" aria-label="Main">
