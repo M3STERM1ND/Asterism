@@ -119,6 +119,19 @@ def read_rows(path):
 
 
 # ------------------------------------------------------------------ talking to Supabase
+def check_connection(client):
+    """Reach the database as a signed-out visitor. Being refused a table (42501) is the right answer: it means
+    the connection works and the access rules hold. Anything else (bad URL, bad key) is an error."""
+    try:
+        client.table("profiles").select("id").limit(1).execute()
+    except Exception as error:
+        if "42501" in str(error) or "permission denied" in str(error):
+            return
+        raise CloudError(f"Could not reach Supabase: {error}") from error
+    raise CloudError("Signed-out visitors can read profiles: run supabase/grants.sql to lock that down")
+
+
+
 def sign_in(client, email, password):
     try:
         answer = client.auth.sign_in_with_password({"email": email, "password": password})
@@ -205,7 +218,7 @@ def main(args):
     try:
         client = connect()
         if command == "check":
-            client.table("profiles").select("id").limit(1).execute()
+            check_connection(client)
             print(f"Connected to {settings()[0]}")
         elif command == "register":
             role = ask("Role (patient or coach): ").lower()
