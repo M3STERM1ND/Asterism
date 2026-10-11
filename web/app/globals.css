@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+/* Design system: one dominant color (night), one accent (star gold), warm ivory text. Nothing else. */
+@theme {
+  --color-night: #0b1024;
+  --color-night-2: #121a38;
+  --color-line: #263055;
+  --color-ivory: #f5f0e6;
+  --color-mist: #c3cae0;      /* secondary text: 10:1 on night, passes AA */
+  --color-gold: #f2c45a;
+  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-dm-sans);
+  /* spacing scale: 8 16 24 40 64 96 160 */
+  --spacing-section: 160px;
+}
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  background: var(--color-night);
+  color: var(--color-ivory);
+  font-family: var(--font-sans);
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+::selection { background: var(--color-gold); color: var(--color-night); }
