@@ -260,6 +260,21 @@ function PatientView({ me, onMessage }: { me: Profile; onMessage: (t: string, ba
   return (
     <div>
       <h1 className="font-display text-5xl">Hello, {me.display_name}.</h1>
+      <div className="mt-10 grid gap-4 md:grid-cols-2">
+        <a href="/play" className="group rounded-3xl border border-gold bg-night-2 p-8 transition-transform hover:-translate-y-0.5">
+          <p className="font-display text-3xl">Play in your browser</p>
+          <p className="mt-3 text-mist">Reach practice with your webcam, right here. Each round saves to your account.</p>
+          <p className="mt-6 font-semibold text-gold">Start practice →</p>
+        </a>
+        <div className="rounded-3xl border border-line p-8">
+          <p className="font-display text-3xl">The full game</p>
+          <p className="mt-3 text-mist">
+            Battles, blocking, safe-reach calibration and the lean guard run on your computer. Download it from{" "}
+            <a className="text-ivory underline decoration-gold underline-offset-4" href="https://github.com/M3STERM1ND/Asterism">GitHub</a>,
+            then sign in with this same email in the game. Your battles upload here by themselves.
+          </p>
+        </div>
+      </div>
       <h2 className="mb-4 mt-14 text-xl">From your coach</h2>
       <FeedbackList items={notes} names={names} />
       <h2 className="mb-4 mt-14 text-xl">Your sessions</h2>

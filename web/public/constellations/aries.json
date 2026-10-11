@@ -1,0 +1,28 @@
+{
+  "name": "Aries",
+  "order": "sequential",
+  "stars": [
+    [
+      1.0,
+      0.806
+    ],
+    [
+      0.98,
+      0.689
+    ],
+    [
+      0.758,
+      0.486
+    ],
+    [
+      0.0,
+      0.194
+    ]
+  ],
+  "star_names": [
+    "Mesarthim",
+    "Sheratan",
+    "Hamal",
+    "Bharani (41 Ari)"
+  ]
+}
