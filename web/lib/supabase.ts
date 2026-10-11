@@ -2,8 +2,10 @@ import { createClient } from "@supabase/supabase-js";
 
 // The anon (publishable) key is safe in the browser: Supabase's row-level security decides what each
 // signed-in person can read. Never put the service_role key here.
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+// Pasted values often carry spaces, quotes or a trailing /rest/v1/: clean them so a near-miss still works.
+const clean = (v?: string) => (v ?? "").trim().replace(/^["']|["']$/g, "").trim();
+const url = clean(process.env.NEXT_PUBLIC_SUPABASE_URL).replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
+const key = clean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
 // False until both are set (in .env.local, or in Vercel > Settings > Environment Variables). The site still
 // builds without them; the portal then says what's missing instead of crashing.
