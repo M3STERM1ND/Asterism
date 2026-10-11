@@ -12,7 +12,6 @@ import numpy as np
 
 import events
 from fingers import backup_tips
-from sessions.reach import HIT_RADIUS
 from text import draw_text
 
 W, H = 1280, 720
@@ -252,7 +251,10 @@ def draw_reach(light, glow, reach, now):
     if reach is None or reach.points is None:
         return
     pts = [(int(x), int(y)) for x, y in reach.points]
-    draw_unlit(light, glow, reach, pts, now)
+    if reach.previewing(now):
+        draw_preview(light, glow, pts, reach.preview_left(now))
+    elif reach.assisted:
+        draw_unlit(light, glow, reach, pts, now)
     won = reach.won_at is not None
     shine = 0.75 + 0.25 * np.sin((now - reach.won_at) * 3) if won else 0.6  # the finished shape breathes
     for i in range(1, len(reach.lit_at)):
@@ -263,18 +265,51 @@ def draw_reach(light, glow, reach, now):
     for p in pts[:len(reach.lit_at)]:
         cv2.circle(light, p, 5, GOLD, -1, cv2.LINE_AA)
         cv2.circle(glow, small(p), 2, scale(GOLD, 0.8 * shine), -1, cv2.LINE_AA)
-    i = reach.target_index()
+    i = reach.target_index()  # None when it isn't the player's turn: nothing to aim at
     if i is not None:
         target = pts[i]
         color = RED if reach.blocked else CYAN  # red while leaning: this star can't be lit right now
         pulse = 0.5 + 0.5 * np.sin(now * 4)
-        ring = int(HIT_RADIUS * (0.55 + 0.15 * pulse))
-        cv2.circle(light, target, ring, scale(color, 0.5 + 0.3 * pulse), 1, cv2.LINE_AA)
-        cv2.circle(light, target, 6, color, -1, cv2.LINE_AA)
-        cv2.circle(glow, small(target), 2 + int(2 * pulse), scale(color, 0.6 + 0.4 * pulse), -1, cv2.LINE_AA)
+        ring = int(reach.hit_radius * (0.55 + 0.15 * pulse))
+        if reach.target_visible(now):  # unassisted, the next star shows only during a hint
+            cv2.circle(light, target, ring, scale(color, 0.5 + 0.3 * pulse), 1, cv2.LINE_AA)
+            cv2.circle(light, target, 6, color, -1, cv2.LINE_AA)
+            cv2.circle(glow, small(target), 2 + int(2 * pulse), scale(color, 0.6 + 0.4 * pulse), -1, cv2.LINE_AA)
         if reach.dwell > 0:  # the hold: a ring fills clockwise from the top
             cv2.ellipse(light, target, (ring + 8, ring + 8), -90, 0, 360 * reach.dwell, CYAN, 3, cv2.LINE_AA)
 
+
+def draw_preview(light, glow, pts, left):
+    """Unassisted: the whole constellation to memorize, fading out over its last half second."""
+    k = min(1.0, left / 0.5) * 0.8
+    for a, b in zip(pts, pts[1:]):
+        cv2.line(light, a, b, scale(GOLD, 0.5 * k), 2, cv2.LINE_AA)
+        cv2.line(glow, small(a), small(b), scale(GOLD, 0.25 * k), 1, cv2.LINE_AA)
+    for p in pts:
+        cv2.circle(light, p, 6, scale(GOLD, k), -1, cv2.LINE_AA)
+        cv2.circle(glow, small(p), 2, scale(GOLD, 0.8 * k), -1, cv2.LINE_AA)
+
+
+def draw_preview_labels(frame, reach, now):
+    """The drawing order (1, 2, 3...) beside each star while the constellation is on show to memorize."""
+    if reach is None or not reach.previewing(now):
+        return
+    k = min(1.0, reach.preview_left(now) / 0.5)
+    for i, (x, y) in enumerate(reach.points):
+        draw_text(frame, str(i + 1), (int(x) + 12, int(y) - 28), 16, MUTED, 500, k)
+
+
+def memory_prompt(reach, now):
+    """The line to show while drawing unassisted: memorize, draw from memory, or suggest a hint. None when assisted."""
+    if reach is None or reach.assisted or reach.points is None or reach.won_at is not None:
+        return None
+    if reach.previewing(now):
+        return f"Memorize the shape  ·  {int(np.ceil(reach.preview_left(now)))}"
+    if reach.stuck(now):
+        return "Stuck? Press H for a hint"
+    if now < reach.hint_until:
+        return "Hint: the next star"
+    return "Draw it from memory  ·  H shows the next star"
 
 def draw_unlit(light, glow, reach, pts, now):
     """Stars not yet lit, in the reach's unlit color (Scorpius waits in red until each star is taken back)."""
@@ -309,6 +344,9 @@ def draw_reach_text(frame, reach, now):
         return
     if reach.won_at is None:
         draw_text(frame, f"{reach.name}  ·  {lit} of {total}", (W // 2, MARGIN), 20, MUTED, 500, 0.9, "center")
+        prompt = memory_prompt(reach, now)
+        if prompt:
+            draw_text(frame, prompt, (W // 2, MARGIN + 34), 22, CYAN, 500, 1.0, "center")
         return
     fade = min(1.0, (now - reach.won_at) / 1.0)
     top = min(y for _, y in reach.points)
@@ -360,9 +398,11 @@ def draw_calibration_text(frame, cal, now):
         cv2.line(frame, (left, y), (int(left + (right - left) * cal.progress(now)), y), CYAN, 3, cv2.LINE_AA)
 
 
-KEYS = {"start": "P play  ·  R practice  ·  E editor  ·  T lean test  ·  F full screen  ·  Q quit",
-        "battle": "M start screen  ·  C calibrate  ·  L lean guard  ·  Space take the hit  ·  R retry  ·  N skip  ·  Q quit",
-        "practice": "M start screen  ·  C calibrate  ·  L lean guard  ·  N next  ·  R restart  ·  D lean bars  ·  Q quit",
+KEYS = {"lobby": "Type to fill in the form  ·  Esc back  ·  F full screen",
+        "start": "P play  ·  R practice  ·  E editor  ·  T lean test  ·  G progress  ·  W switch run  ·  Q quit",
+        "battle": "C calibrate  ·  L lean guard  ·  1-8 attack  ·  B block  ·  0 rest  ·  H hint  ·  R retry  ·  M menu  ·  Q quit",
+        "practice": "M start screen  ·  C calibrate  ·  L lean guard  ·  N next  ·  R restart  ·  H hint  ·  D lean bars  ·  Q quit",
+        "progress": "R therapist report  ·  M start screen  ·  F full screen  ·  Q quit",
         "editor": "Click place a star  ·  Right-click or Backspace undo  ·  X clear  ·  N name  ·  S save  ·  M start screen",
         "test": "M start screen  ·  C calibrate  ·  F full screen  ·  Q quit"}
 
@@ -383,17 +423,18 @@ def draw_hud(frame, fps, track_fps, has_hand, figure, now, show_hint=True, guard
         draw_text(frame, "Sit back a little so all of Orion fits", (W // 2, MARGIN + 34), 18, MUTED, 400, 0.85, "center")
 
 
-def draw(hands, pose, figure, fps, track_fps, play):
+def draw(hands, pose, figure, fps, track_fps, play, world=None):
     """Draw one full frame of the game (sky, Orion, hands, session, effects, HUD) and return it.
-    screens.py draws the start screen and the lean test on top of this."""
+    screens.py draws the start screen and the lean test on top of this.
+    world(frame, glow), if given, draws the battle's enemy and bars before the one and only glow pass."""
     now = time.monotonic()
     reach, calibrator, guard = play.reach, play.calibrator, play.guard
     light = np.zeros((H, W, 3), np.uint8)
     glow = np.zeros((H // GLOW_SCALE, W // GLOW_SCALE, 3), np.uint8)
     draw_sky(light, glow, now)
-    if figure:
+    if figure and play.mode != "progress":  # the Progress charts need the sky to themselves
         drawing = reach is not None and reach.points is not None and reach.won_at is None
-        draw_orion(light, glow, figure, ORION_DIM if drawing or play.mode in ("start", "editor") else 1.0)
+        draw_orion(light, glow, figure, ORION_DIM if drawing or play.mode in ("lobby", "start", "editor", "progress") else 1.0)
     draw_sky_constellations(light, glow, play.sky)
     draw_reach(light, glow, reach, now)
     draw_calibration(light, glow, calibrator, now)
@@ -403,7 +444,10 @@ def draw(hands, pose, figure, fps, track_fps, play):
     frame = cv2.add(BACKGROUND, light)
     anchor = to_px(hands[0][INDEX_TIP]) if hands else (W // 2, H // 2)
     draw_effects(frame, glow, anchor)
+    if world is not None:
+        world(frame, glow)
     add_glow(frame, glow)
+    draw_preview_labels(frame, reach, now)
     if figure and play.mode == "practice":  # names would collide with the start screen and test text
         draw_orion_names(frame, figure)
     draw_reach_text(frame, reach, now)

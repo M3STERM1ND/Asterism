@@ -4,6 +4,9 @@ it waits as long as the player needs. Opening before the hold is done ends the r
 How closed a hand is comes from its openness: the average distance from the wrist to the five
 fingertips, divided by the palm length (wrist to the base of the middle finger). Dividing by the
 palm makes it the same at any distance from the camera. Open hand: about 1.8. Fist: about 0.9.
+
+For the therapist: open_seconds is how long the hand took to open fully after the hold was done
+(slow release is common after a stroke, and getting faster is progress).
 """
 import numpy as np
 
@@ -34,6 +37,8 @@ class Grip:
         self.since = None        # when the fist closed
         self.last_seen = None
         self.progress = 0.0      # 0 to 1 through the hold
+        self.held_at = None      # when the hold was completed
+        self.open_seconds = None  # how long opening fully took after the hold
 
     def update(self, hands, now):
         """Advance the rep with this frame's hands (uses the most closed hand)."""
@@ -52,8 +57,9 @@ class Grip:
             if self.value > RELEASED:
                 self.finish("early")
             elif self.progress >= 1.0:
-                self.state = "open"
+                self.state, self.held_at = "open", now
         elif self.state == "open" and self.value > OPEN:
+            self.open_seconds = now - self.held_at
             self.finish("block")
 
     def finish(self, result):

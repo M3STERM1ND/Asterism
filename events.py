@@ -96,3 +96,8 @@ def active_effects():
     now = time.monotonic()
     _recent[:] = [e for e in _recent if now - e[3] < EFFECT_SECONDS]
     return [(event, n, pos, now - fired) for event, n, pos, fired in _recent]
+
+
+def clear():
+    """Forget recent effects (a new turn starts: last turn's shield or attack must not show on it)."""
+    _recent.clear()

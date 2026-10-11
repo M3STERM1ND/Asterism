@@ -1,3 +1,12 @@
 .venv/
 __pycache__/
 *.pyc
+demo_data/
+data/
+reports/
+# The player's own data: sessions and answers (health data), progress, and generated reports
+/sessions.csv
+/settings.json
+*.db
+*.tmp
+.claude/
