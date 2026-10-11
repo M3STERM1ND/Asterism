@@ -80,7 +80,7 @@ def main():
     view = View()
     star_count = 0
     store = Store()  # accounts, runs and coach feedback (data/asterism.db)
-    play = Play((render.W, render.H), view, store=store)
+    play = Play((render.W, render.H), view, store=store, use_cloud=True)  # Supabase sign-in when .env is set up
     open_window(play)
     tuning = False  # key D shows the lean check bars while playing
     fps, track_fps, frames, tracked, last_report = 0.0, 0.0, 0, 0, time.monotonic()
