@@ -58,14 +58,15 @@ def largest_scale(rel, center, shoulder, reach, bounds):
     return min(limits)
 
 
-def place_calibrated(stars, cal, bounds, tries=15):
+def place_calibrated(stars, cal, bounds, tries=15, edge=EDGE):
     """Center the constellation near the reaching shoulder and scale it so its outer stars reach the
-    edge of the calibrated range. If the screen or camera cuts that range off, try nearby centers
-    and keep the one that allows the biggest constellation."""
+    edge of the calibrated range (edge = the share of it to use; the difficulty picks that). If the
+    screen or camera cuts that range off, try nearby centers and keep the one that allows the
+    biggest constellation."""
     pts = np.array(stars, dtype=float)
     rel = pts - (pts.min(axis=0) + pts.max(axis=0)) / 2
     shoulder = np.array(cal.shoulder)
-    reach = cal.reach * cal.width * EDGE
+    reach = cal.reach * cal.width * edge
     best_scale, best_center = 0.0, shoulder
     for dx in np.linspace(-reach, reach, tries):
         for dy in np.linspace(-reach, reach, tries):
@@ -78,12 +79,14 @@ def place_calibrated(stars, cal, bounds, tries=15):
     return [tuple(p) for p in best_center + rel * best_scale]
 
 
-def spread_out(points, bounds, min_gap, rounds=60):
+def spread_out(points, bounds, min_gap, rounds=60, within=None):
     """Push apart consecutive stars (the ones touched one after another) that are closer than
     min_gap, along the line between them, keeping them inside the bounds. Spread-out shapes don't
-    change; tight runs like Aries's three close stars just stretch a little."""
+    change; tight runs like Aries's three close stars just stretch a little.
+    within=(shoulder, radius): also keep every star inside the patient's reach on every round, so the
+    reach limit and the spacing are solved together (clamping only at the end undoes the spacing)."""
     pts = np.array(points, dtype=float)
-    for _ in range(rounds):
+    for _ in range(rounds * (4 if within else 1)):
         moved = False
         for i in range(len(pts) - 1):
             gap = pts[i + 1] - pts[i]
@@ -97,12 +100,32 @@ def spread_out(points, bounds, min_gap, rounds=60):
             moved = True
         pts[:, 0] = np.clip(pts[:, 0], bounds[0], bounds[2])
         pts[:, 1] = np.clip(pts[:, 1], bounds[1], bounds[3])
+        if within is not None:
+            pts = np.array(limit_to_reach(pts, *within))
         if not moved:
             break
     return [tuple(p) for p in pts]
+
+
+def closest_step(points):
+    """Distance in pixels between the two closest consecutive stars (touched one after the other)."""
+    pts = np.array(points)
+    return min(np.hypot(*(pts[i + 1] - pts[i])) for i in range(len(pts) - 1))
 
 
 def closest_gap(points):
     """Distance in pixels between the two closest stars."""
     pts = np.array(points)
     return min(np.hypot(*(pts[i] - pts[j])) for i in range(len(pts)) for j in range(i + 1, len(pts)))
+
+
+def limit_to_reach(points, shoulder, radius):
+    """Pull any star that sits farther than radius from the shoulder back onto that circle.
+    Spreading close stars apart can push one out; the patient's reach limit always wins."""
+    shoulder = np.array(shoulder, dtype=float)
+    limited = []
+    for p in points:
+        offset = np.array(p, dtype=float) - shoulder
+        dist = float(np.hypot(*offset))
+        limited.append(tuple(shoulder + offset * (radius / dist)) if dist > radius else tuple(p))
+    return limited

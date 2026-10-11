@@ -1,5 +1,6 @@
 """Camera: reads the webcam on a background thread so the game never waits for a frame."""
 import os
+import sys
 import threading
 
 os.environ["OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS"] = "0"  # makes Media Foundation open much faster
@@ -9,7 +10,8 @@ import cv2  # noqa: E402  (must come after the env var above)
 class Camera:
     def __init__(self, width=1280, height=720):
         """Open the default webcam (Media Foundation gives 30 fps here; DirectShow only gave 10)."""
-        self.cam = cv2.VideoCapture(0, cv2.CAP_MSMF)
+        backend = cv2.CAP_MSMF if sys.platform == "win32" else cv2.CAP_AVFOUNDATION if sys.platform == "darwin" else cv2.CAP_ANY
+        self.cam = cv2.VideoCapture(0, backend)
         self.cam.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         self.cam.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         if not self.cam.isOpened():

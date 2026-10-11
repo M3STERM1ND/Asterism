@@ -1,6 +1,7 @@
 """Screens: text panels drawn on top of the sky, after render.py has drawn the frame.
 
-  start screen - title and the menu (P play, R practice, E editor; T lean test in the key bar)
+  start screen - title, the menu (P play, R practice, E editor, G progress; T lean test in the key bar)
+                 and the saved settings (D difficulty, A assisted learning)
   editor       - the stars being placed, their order, the name, and save messages
   lean test    - each step's instruction, countdown and progress, then the results table
   tuning bars  - the lean guard's live readings (key D, and always during the lean test)
@@ -9,28 +10,70 @@ import cv2
 import numpy as np
 
 from editor import MAX_STARS, MIN_STARS
+from game.difficulty import by_name, reach_fraction
 from lean_test import STEPS
+from battle_screen import draw_text_block
+from lobby_screen import draw_lobby
+from progress_screen import draw_progress
 from render import CYAN, GLOW_SCALE, GOLD, H, MARGIN, MUTED, RED, W, add_glow, scale, small
 from text import draw_text
 
 
 MENU = (("P", "Play", "Battles: win back the sky from Scorpius, turn by turn"),
         ("R", "Practice", "Reach only: draw the zodiac, one constellation at a time"),
-        ("E", "Editor", "Craft a constellation: click to place 4 to 8 stars"))
+        ("E", "Editor", "Craft a constellation: click to place 4 to 8 stars"),
+        ("G", "Progress", "Your trends over time, and a report for your therapist"))
+FEEDBACK_WIDTH, FEEDBACK_CHARS = 330, 220  # the coach's notes sit in the empty column left of the menu
+ASSIST_NOTES = {True: "On: the next star glows and shows where to go",
+                False: "Off: see the shape for 3 seconds, then draw it from memory"}
 
 
-def draw_start(frame, now):
-    """The start menu: the title, a one-line idea, and the three choices with their keys."""
+def difficulty_note(difficulty):
+    """What the chosen difficulty means for the patient, in a line."""
+    return (f"Stars sit at {round(100 * reach_fraction(difficulty))}% of your reach  ·  "
+            f"hit radius {difficulty.hit_radius} px  ·  mana +{difficulty.mana_refill} a turn")
+
+
+def draw_key_row(frame, key, label, value, note, y):
+    """A start-screen row: the key in a ring, a name, its current value in gold and a muted explanation."""
+    cv2.circle(frame, (W // 2 - 190, y + 14), 20, scale(CYAN, 0.9), 2, cv2.LINE_AA)
+    draw_text(frame, key, (W // 2 - 190, y + 3), 20, CYAN, 600, 1.0, "center")
+    draw_text(frame, label, (W // 2 - 140, y - 2), 24, MUTED, 500, 1.0)
+    draw_text(frame, value, (W // 2 + 120, y - 2), 24, GOLD, 600, 1.0)
+    draw_text(frame, note, (W // 2 - 140, y + 28), 16, MUTED, 400, 1.0)
+
+
+def draw_start(frame, now, settings):
+    """The start menu: the title, a one-line idea, the choices with their keys, then the two saved settings."""
     glow = 0.85 + 0.15 * np.sin(now * 1.5)
-    draw_text(frame, "Asterism", (W // 2, 150), 72, GOLD, 600, glow, "center")
-    draw_text(frame, "Reach to draw the stars", (W // 2, 245), 24, MUTED, 400, 1.0, "center")
+    draw_text(frame, "Asterism", (W // 2, 90), 72, GOLD, 600, glow, "center")
+    draw_text(frame, "Reach to draw the stars", (W // 2, 180), 24, MUTED, 400, 1.0, "center")
     for i, (key, label, note) in enumerate(MENU):
-        y = 315 + i * 80
+        y = 232 + i * 64
         cv2.circle(frame, (W // 2 - 190, y + 18), 24, scale(CYAN, 0.9), 2, cv2.LINE_AA)
         draw_text(frame, key, (W // 2 - 190, y + 6), 24, CYAN, 600, 1.0, "center")
         draw_text(frame, label, (W // 2 - 140, y - 2), 30, GOLD, 600, 1.0)
-        draw_text(frame, note, (W // 2 - 140, y + 38), 18, MUTED, 400, 1.0)
-    draw_text(frame, "Sit 3 to 4 feet from the laptop, facing the camera", (W // 2, H - 130), 18, MUTED, 400, 0.9, "center")
+        draw_text(frame, note, (W // 2 - 140, y + 34), 16, MUTED, 400, 1.0)
+    difficulty = by_name(settings.difficulty)
+    draw_key_row(frame, "D", "Difficulty", difficulty.name, difficulty_note(difficulty), 520)
+    draw_key_row(frame, "A", "Assisted learning", "On" if settings.assisted else "Off",
+                 ASSIST_NOTES[settings.assisted], 580)
+
+
+def draw_run_info(frame, play):
+    """With accounts: whose run this is (W switches), and the coach's latest notes."""
+    if play.run is None:
+        return
+    draw_text(frame, f"{play.lobby.user.display_name}  ·  run: {play.run.name}  ·  W switch run",
+              (W - MARGIN, MARGIN + 26), 15, MUTED, 500, 1.0, "right")
+    if not play.feedback:
+        return
+    draw_text(frame, "From your coach", (MARGIN, 236), 15, GOLD, 600, 1.0)
+    y = 266
+    for note in play.feedback:
+        text = note.text if len(note.text) <= FEEDBACK_CHARS else note.text[:FEEDBACK_CHARS - 3] + "..."
+        draw_text(frame, f"{note.coach_name} · {note.created_at[5:16]}", (MARGIN, y), 13, MUTED, 500, 1.0)
+        y = draw_text_block(frame, text, MARGIN, y + 20, 15, CYAN, 500, FEEDBACK_WIDTH, 20) + 10
 
 
 def draw_canvas(frame, canvas):
@@ -139,8 +182,15 @@ def draw_test_results(frame, test):
 
 def draw_screens(frame, play, tuning, now):
     """Draw whichever screen the current mode needs on top of the frame."""
+    if play.mode == "lobby":
+        draw_lobby(frame, play.lobby, now)
+        return
     if play.mode == "start":
-        draw_start(frame, now)
+        draw_start(frame, now, play.settings)
+        draw_run_info(frame, play)
+        return
+    if play.mode == "progress":
+        draw_progress(frame, play.sessions, now, play.message)
         return
     if play.mode == "editor":
         draw_editor(frame, play.editor, now)
