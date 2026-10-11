@@ -10,3 +10,4 @@ reports/
 *.db
 *.tmp
 .claude/
+.env
