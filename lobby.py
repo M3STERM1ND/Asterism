@@ -1,8 +1,10 @@
 """Lobby: who is playing, and which run (save file) they play, before the start menu.
 
   welcome  - L log in, N create a patient account (coaches sign up in the coach portal)
-  login    - username, password
-  register - username, your name, password
+  login    - email (Supabase, any computer) or username (this computer only), password
+  register - email (only with Supabase), username, your name, password
+With Supabase set up (.env), signing up or logging in with an email also connects the account to the cloud,
+so every battle uploads by itself; there is no separate sign-up or connect step.
   runs     - the patient's runs, most recent first: 1-9 continue one, N start a new run, O log out
   new_run  - type the new run's name
 A run is like a Minecraft world: continuing one adds to its progress, sessions and videos; a new run
@@ -19,11 +21,18 @@ FORMS = {
     "register": (("username", "Username", False), ("name", "Your name", False), ("password", "Password", True)),
     "new_run": (("name", "Run name", False),),
 }
+CLOUD_FORMS = {  # with Supabase: an email first
+    "login": (("username", "Email (or username on this computer)", False), ("password", "Password", True)),
+    "register": (("email", "Email", False), ("username", "Username", False), ("name", "Your name", False),
+                 ("password", "Password", True)),
+}
 
 
 class Lobby:
-    def __init__(self, store):
+    def __init__(self, store, cloud=None):
+        """cloud: something with sign_up and sign_in (cloud.GameCloud), or None to stay on this computer."""
         self.store = store
+        self.cloud = cloud
         self.user = None
         self.state = "welcome"
         self.values = {}
@@ -35,6 +44,12 @@ class Lobby:
     def typing(self):
         """True while a form is open: every key is a character (Q doesn't quit)."""
         return self.state in FORMS
+
+    def fields(self):
+        """The current form's fields (with Supabase, login and sign-up start with an email)."""
+        if self.cloud is not None and self.state in CLOUD_FORMS:
+            return CLOUD_FORMS[self.state]
+        return FORMS[self.state]
 
     def runs(self):
         return self.store.runs(self.user.id)[:MAX_RUNS_SHOWN] if self.user else []
@@ -67,7 +82,7 @@ class Lobby:
             self.say("Logged out")
 
     def form_key(self, key):
-        fields = FORMS[self.state]
+        fields = self.fields()
         name = fields[self.field][0]
         if key == ESC:
             self.state = "runs" if self.user else "welcome"
@@ -85,7 +100,16 @@ class Lobby:
     def submit(self):
         v = self.values
         try:
-            if self.state == "login":
+            if self.state == "login" and self.cloud is not None and "@" in v.get("username", ""):
+                user = self.cloud.sign_in(self.store, v["username"].strip(), v.get("password", ""))
+                self.signed_in(user, f"Welcome back, {user.display_name}. Your battles sync to your coach")
+            elif self.state == "register" and self.cloud is not None:
+                user = self.cloud.sign_up(self.store, v.get("email", "").strip(), v.get("password", ""),
+                                          v.get("username", ""), v.get("name", ""))
+                imported = self.store.import_legacy(user)
+                self.signed_in(user, f"Welcome, {user.display_name}. Your battles sync to your coach" +
+                               (f". Earlier sessions are in '{imported.name}'" if imported else ""))
+            elif self.state == "login":
                 user = self.store.login(v.get("username", ""), v.get("password", ""))
                 if user is None:
                     raise AccountError("Wrong username or password")

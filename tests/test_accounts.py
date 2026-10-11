@@ -312,3 +312,44 @@ class PortalTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FakeCloud:
+    """Stands in for cloud.GameCloud: remembers sign-ups, signs in by email."""
+    def __init__(self):
+        self.people = {}
+
+    def sign_up(self, store, email, password, username, name):
+        self.people[email] = (password, username, name)
+        return store.register(username, password, "patient", name)
+
+    def sign_in(self, store, email, password):
+        if self.people.get(email, ("",))[0] != password:
+            raise AccountError("Wrong email or password, or no internet")
+        _, username, name = self.people[email]
+        row = store.db.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+        return store.user(row["id"]) if row else store.register(username, password, "patient", name)
+
+
+class CloudLobbyTest(unittest.TestCase):
+    def test_sign_up_asks_for_an_email_and_logs_in_anywhere(self):
+        fake = FakeCloud()
+        lobby = Lobby(new_store(), fake)
+        lobby.handle_key(ord("n"))
+        self.assertEqual([f[0] for f in lobby.fields()], ["email", "username", "name", "password"])
+        for value in ("ana@example.com", "ana", "Ana", "hunter22"):
+            type_text(lobby, value)
+            lobby.handle_key(13)
+        self.assertEqual((lobby.state, lobby.user.username), ("runs", "ana"))
+        other_computer = Lobby(new_store(), fake)
+        other_computer.handle_key(ord("l"))
+        type_text(other_computer, "ana@example.com")
+        other_computer.handle_key(13)
+        type_text(other_computer, "hunter22")
+        other_computer.handle_key(13)
+        self.assertEqual(other_computer.user.username, "ana")
+
+    def test_without_supabase_the_forms_stay_local(self):
+        lobby = Lobby(new_store())
+        lobby.handle_key(ord("n"))
+        self.assertEqual([f[0] for f in lobby.fields()], ["username", "name", "password"])

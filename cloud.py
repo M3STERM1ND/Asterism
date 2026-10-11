@@ -253,6 +253,58 @@ def client_for(store, username, connect_fn=None):
     return client, profile
 
 
+class GameCloud:
+    """The game's lobby signs up and logs in through Supabase with this, so a patient's account is in the cloud
+    and connected from the start: one sign-up, in the game, and every battle syncs."""
+
+    def sign_up(self, store, email, password, username, name):
+        from accounts import AccountError
+        username = username.strip().lower()
+        if store.db.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
+            raise AccountError("That username is taken on this computer")
+        client = connect()
+        try:
+            register(client, email, password, username, name, "patient")
+        except CloudError as error:
+            raise AccountError(str(error).replace("Sign-up failed: ", "")) from error
+        user = store.register(username, password, "patient", name)
+        try:
+            connect_local(store, username, client, email, password)
+        except CloudError as error:  # e.g. email confirmation is on: the local account still works
+            raise AccountError("Account made. Confirm your email, then log in with it") from error
+        return user
+
+    def sign_in(self, store, email, password):
+        """Sign in with Supabase; make or update the matching local account and remember the connection."""
+        from accounts import AccountError
+        client = connect()
+        try:
+            profile = sign_in(client, email, password)
+        except CloudError as error:
+            raise AccountError("Wrong email or password, or no internet") from error
+        if profile["role"] != "patient":
+            raise AccountError("Coaches use the website; the game is for patients")
+        username = profile["username"]
+        row = store.db.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+        user = store.user(row["id"]) if row else store.register(username, password, "patient", profile["display_name"])
+        if row:
+            store.set_password(username, password)  # keep the offline login in step with Supabase
+        links = load_links(store)
+        links[username] = {"email": email, "refresh_token": client.auth.get_session().refresh_token}
+        save_links(store, links)
+        return user
+
+
+def game_cloud():
+    """A GameCloud if Supabase is set up in .env, else None (the game then stays on this computer)."""
+    try:
+        settings()
+        import supabase  # noqa: F401  (installed?)
+        return GameCloud()
+    except (CloudError, ImportError):
+        return None
+
+
 def sync(data_dir, username):
     """Upload a connected local account's new sessions and videos. Quiet; never raises (the game keeps going)."""
     try:

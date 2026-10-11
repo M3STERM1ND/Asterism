@@ -37,8 +37,8 @@ def draw_lobby(frame, lobby, now):
 def draw_form(frame, lobby, now):
     title = {"login": "Log in", "register": "New patient account", "new_run": "Start a new run"}[lobby.state]
     draw_text(frame, title, (W // 2, 170), 30, GOLD, 600, 1.0, "center")
-    for i, (name, label, secret) in enumerate(FORMS[lobby.state]):
-        y = 240 + i * 80
+    for i, (name, label, secret) in enumerate(lobby.fields()):
+        y = 220 + i * (62 if len(lobby.fields()) > 3 else 80)
         value = lobby.values.get(name, "")
         shown = "*" * len(value) if secret else value
         active = i == lobby.field

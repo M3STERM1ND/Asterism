@@ -57,14 +57,14 @@ def practice_list(folder=FOLDER):
 
 
 class Play:
-    def __init__(self, size, view, settings_path=SETTINGS_PATH, log_path=LOG_PATH, store=None):
+    def __init__(self, size, view, settings_path=SETTINGS_PATH, log_path=LOG_PATH, store=None, use_cloud=False):
         """store: the accounts store. With one, the game opens on the lobby (log in, pick a run) and every
         run keeps its own settings, session log and videos; without one it plays straight from the given files."""
         self.size = size
         self.settings_path = settings_path
         self.log_path = log_path
         self.store = store
-        self.lobby = Lobby(store) if store is not None else None
+        self.lobby = Lobby(store, cloud.game_cloud() if store is not None and use_cloud else None) if store is not None else None
         self.run = None          # the run (save file) being played, with accounts (set before go_to_start runs)
         self.videos_dir = None   # where this run's videos go (None: no recording)
         self.recorder = Recorder()
